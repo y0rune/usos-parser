@@ -7,6 +7,8 @@ require 'spreadsheet'
 require 'thread'
 require 'thwait'
 
+starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
 semestr = "Semestr zimowy 2019"
 
 url = "https://usosweb.amu.edu.pl/kontroler.php?_action=katalog2/przedmioty/szukajPrzedmiotu&cp_showDescriptions=0&cp_showGroupsColumn=0&cp_cdydsDisplayLevel=2&f_tylkoWRejestracji=0&f_obcojezyczne=0&method=faculty_organized&kierujNaPlanyGrupy=0&jed_org_kod=0600000000&tab9b4e_offset=0&tab9b4e_limit=2000&tab9b4e_order=2a1a"
@@ -16,12 +18,12 @@ source = open(url, :read_timeout => 300).read
 prz_kod = source.scan(/prz_kod=06-D\w*-*\w*-*\w*-*\w*-*/).uniq
 
 file = File.open("output.csv", 'w')
-file.puts "zaj_cyk_id,typ,kod,nazwa,nr_gr,Mc,dzien,godzina,nazwisko,imie"
+file.puts "zaj_cyk_id,typ,kod,nazwa,nr_gr,Mc,dzien,godzina,sala,tytul,nazwisko,imie"
 file.close
 
 book = Spreadsheet::Workbook.new
 sheet = book.create_worksheet(name: "#{semestr}")
-sheet.row(0).push('zaj_cyk_id','typ','kod','nazwa','nr_gr','Mc','dzien','godzina','stopien','nazwisko','imie')
+sheet.row(0).push('zaj_cyk_id','typ','kod','nazwa','nr_gr','Mc','dzien','godzina','sala','stopien','nazwisko','imie')
 
 j = 1
 threads = []
@@ -33,7 +35,7 @@ prz_kod.each do |przkod|
     semestrPrzedmiotu = pokazPrzedmiot.scan(semestr).uniq
     przedmiot = pokazPrzedmiot.scan(/<h1>.*/).uniq.to_s.sub("<h1>","").sub("</h1>","")
 
-    if semestrPrzedmiotu != []
+    if semestrPrzedmiotu != [] && (!przkod.match?('-E$'))
       zajCykId = pokazPrzedmiot.scan(/https.*zaj_cyk_id=[0-9]*/).to_s.scan(/[0-9]{2,}/)
 
       zajCykId.each do |zajcyk|
@@ -46,7 +48,7 @@ prz_kod.each do |przkod|
         groups.each do |nrgrupy|
           threads << Thread.new {
           sleep 2
-          typ, dzien, prowadzacyImiona, prowadzacyNazwisko, prowadzacyStopien = ""
+          typ, dzien, prowadzacyImie, prowadzacyNazwisko, prowadzacyStopien = ""
           dzienTygodnia = [/poniedziałek/,/wtorek/,/środa/,/czwartek/,/piątek/]
           typ = [/Praktyka/,/Ćwiczenia/,/Lektorat/,/Zajęcia laboratoryjne/,/Seminarium/,/Wykład/,/Konwersatorium/]
 
@@ -63,17 +65,18 @@ prz_kod.each do |przkod|
           limitMiejsc = table.match(/Limit miejsc: [0-9]+/).to_s.match(/[0-9]+/)
           kod = table.match(/06-D\w*-*\w*-*\w*-*/).to_s.sub("06-","")
           prowadzacyKod = document.to_s.match('os_id=[0-9]+').to_s
+          sala = table.match(/sala \p{L}+-*\w*-*\w*-*/).to_s.sub("sala","").strip
 
           if prowadzacyKod != ""
             prowadzacyUrl = "https://usosweb.amu.edu.pl/kontroler.php?_action=katalog2/osoby/pokazOsobe&" + prowadzacyKod
             puts "prowadzacyUrl: #{prowadzacyUrl}"
             prowadzacyWeb = Nokogiri::HTML(open(prowadzacyUrl, :open_timeout => 300).read)
             prowadzacyInfo = prowadzacyWeb.css('div#user-attrs-id').text.gsub!(/\s+/, ' ').strip
-            prowadzacyImiona = prowadzacyInfo.match(/Imiona.* Nazwisko/).to_s.sub("Imiona","").sub("Nazwisko","").strip
+            prowadzacyImie = prowadzacyInfo.match(/Imiona.* Nazwisko/).to_s.sub("Imiona","").sub("Nazwisko","").to_s.match(/\p{L}+./).to_s.strip
             prowadzacyNazwisko = prowadzacyInfo.match(/Nazwisko.* Stopnie/).to_s.sub("Nazwisko","").sub("Stopnie","").strip
             prowadzacyStopien = prowadzacyInfo.match(/Stopnie.*/).to_s.sub("Stopnie i tytuły","").strip
           else
-            prowadzacyImiona, prowadzacyNazwisko, prowadzacyStopien = "null"
+            prowadzacyImie, prowadzacyNazwisko, prowadzacyStopien = "null"
           end
 
           i = 0
@@ -98,11 +101,10 @@ prz_kod.each do |przkod|
             end
 
             file = File.open("output.csv", 'a')
-            puts "Do pliku: #{zajcyk},#{typ},#{kod},#{przedmiot},#{nrgrupy},#{limitMiejsc},#{dzien},#{godzina},#{prowadzacyStopien},#{prowadzacyNazwisko},#{prowadzacyImiona}"
-            file.puts "#{zajcyk},#{typ},#{kod},#{przedmiot},#{nrgrupy},#{limitMiejsc},#{dzien},#{godzina},#{prowadzacyStopien},#{prowadzacyNazwisko},#{prowadzacyImiona}"
-            file.close
+            puts "Do pliku: #{zajcyk},#{typ},#{kod},#{przedmiot},#{nrgrupy},#{limitMiejsc},#{dzien},#{godzina},#{prowadzacyStopien},#{prowadzacyNazwisko},#{prowadzacyImie}"
+            file.puts "#{zajcyk},#{typ},#{kod},#{przedmiot},#{nrgrupy},#{limitMiejsc},#{dzien},#{godzina},#{sala},#{prowadzacyStopien},#{prowadzacyNazwisko},#{prowadzacyImie}"
 
-            sheet.row(j).push("#{zajcyk}","#{typ}","#{kod}","#{przedmiot}","#{nrgrupy}","#{limitMiejsc}","#{dzien}","#{godzina}","#{prowadzacyStopien}","#{prowadzacyNazwisko}","#{prowadzacyImiona}")
+            sheet.row(j).push("#{zajcyk}","#{typ}","#{kod}","#{przedmiot}","#{nrgrupy}","#{limitMiejsc}","#{dzien}","#{godzina}","#{sala}","#{prowadzacyStopien}","#{prowadzacyNazwisko}","#{prowadzacyImie}")
             j = j + 1
           end
           }
@@ -110,5 +112,10 @@ prz_kod.each do |przkod|
       end
     end
 end
-book.write "#{semestr}.xlsx"
 ThreadsWait.all_waits(*threads)
+book.write "#{semestr}.xlsx"
+file.close
+ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+elapsed = ending - starting
+
+puts "Czas pracy: #{elapsed/60} min"
