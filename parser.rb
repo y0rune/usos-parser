@@ -73,10 +73,9 @@ prz_kod.each do |przkod|
             prowadzacyWeb = Nokogiri::HTML(open(prowadzacyUrl, :open_timeout => 300).read)
             prowadzacyInfo = prowadzacyWeb.css('div#user-attrs-id').text.gsub!(/\s+/, ' ').strip
             prowadzacyImie = prowadzacyInfo.match(/Imiona.* Nazwisko/).to_s.sub("Imiona","").sub("Nazwisko","").to_s.match(/\p{L}+./).to_s.strip
-            prowadzacyNazwisko = prowadzacyInfo.match(/Nazwisko.* Stopnie/).to_s.sub("Nazwisko","").sub("Stopnie","").strip
+            prowadzacyNazwisko = prowadzacyInfo.match(/Nazwisko.*Stopnie/).to_s.sub("Nazwisko","").sub("Stopnie","").strip
             prowadzacyStopien = prowadzacyInfo.match(/Stopnie.*/).to_s.sub("Stopnie i tytuły","").strip
-          else
-            prowadzacyImie, prowadzacyNazwisko, prowadzacyStopien = "null"
+            prowadzacyNazwisko = prowadzacyInfo.match(/Nazwisko .*/).to_s.sub("Nazwisko","").to_s.strip if prowadzacyNazwisko.nil? or prowadzacyNazwisko == ""
           end
 
           i = 0
@@ -96,9 +95,19 @@ prz_kod.each do |przkod|
               end
             end
 
-            if typ == "Zajęcia"
-              typ = "Laboratorium"
-            end
+            typ = "Laboratorium" if typ == "Zajęcia"
+            zajcyk = "NULL" if zajcyk.nil?
+            typ = "NULL" if typ.nil?
+            kod = "NULL" if kod.nil?
+            sala = "NULL" if sala.nil?
+            przedmiot = "NULL" if przedmiot.nil?
+            nrgrupy = "NULL" if nrgrupy.nil?
+            limitMiejsc = "NULL" if limitMiejsc.nil?
+            dzien = "NULL" if dzien.nil?
+            godzina = "NULL" if godzina.nil?
+            prowadzacyStopien = "NULL" if prowadzacyStopien.nil? or prowadzacyStopien == ""
+            prowadzacyImie = "NULL" if prowadzacyImie.nil? or prowadzacyImie == ""
+            prowadzacyNazwisko = "NULL" if prowadzacyNazwisko.nil? or prowadzacyNazwisko == ""
 
             file = File.open("output.csv", 'a')
             puts "Do pliku: #{zajcyk},#{typ},#{kod},#{przedmiot},#{nrgrupy},#{limitMiejsc},#{dzien},#{godzina},#{prowadzacyStopien},#{prowadzacyNazwisko},#{prowadzacyImie}"
@@ -113,7 +122,7 @@ prz_kod.each do |przkod|
     end
 end
 ThreadsWait.all_waits(*threads)
-book.write "#{semestr}.xlsx"
+book.write "#{semestr}.xls"
 file.close
 ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 elapsed = ending - starting
